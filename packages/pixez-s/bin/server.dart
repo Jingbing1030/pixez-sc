@@ -17,6 +17,7 @@ import '../lib/db/task_dao.dart';
 import '../lib/network/pixiv_client.dart';
 import '../lib/network/token_manager.dart';
 import '../lib/service/archive_service.dart';
+import '../lib/service/discovery_service.dart';
 import '../lib/service/download_engine.dart';
 import '../lib/service/media_cache_service.dart';
 import '../lib/ws/ws_handler.dart';
@@ -113,11 +114,16 @@ void main(List<String> args) async {
 
   final server = await io.serve(handler, config.host, config.port);
   print('[Server] Running on http://${server.address.host}:${server.port}');
+
+  // Start LAN discovery beacon and probe responder
+  final discoveryService = DiscoveryService(config: config, discoveryPort: config.discoveryPort);
+  await discoveryService.start();
   print('==================================================');
 
   // Graceful shutdown
   ProcessSignal.sigint.watch().listen((_) async {
     print('\n[Server] Shutting down...');
+    discoveryService.stop();
     tokenManager.stop();
     await server.close();
     appDb.close();
