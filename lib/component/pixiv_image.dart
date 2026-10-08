@@ -171,9 +171,21 @@ class _PixivImageState extends State<PixivImage> {
     }
   }
 
+  String get _effectiveImageUrl {
+    if (userSetting.isServerMode && userSetting.serverUrl.isNotEmpty) {
+      if (url.startsWith(userSetting.serverUrl) || url.contains('/api/v1/media/archive/')) {
+        return url;
+      }
+      final serverBase = userSetting.serverUrl.replaceAll(RegExp(r'/+$'), '');
+      return '$serverBase/api/v1/media/image?url=${Uri.encodeComponent(url)}';
+    }
+    return url;
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = min(min(width ?? 60, height ?? 60), 60.0);
+    final targetUrl = _effectiveImageUrl;
     return CachedNetworkImage(
       placeholder: (context, url) =>
           widget.placeWidget ??
@@ -202,24 +214,29 @@ class _PixivImageState extends State<PixivImage> {
         ),
       ),
       fadeOutDuration: widget.fade ? const Duration(milliseconds: 1000) : null,
-      // memCacheWidth: width?.toInt(),
-      // memCacheHeight: height?.toInt(),
-      imageUrl: url,
-      cacheManager: pixivCacheManager,
+      imageUrl: targetUrl,
+      cacheManager: userSetting.isServerMode ? null : pixivCacheManager,
       height: height,
       width: width,
       fit: fit ?? BoxFit.fitWidth,
-      httpHeaders: {...Hoster.header(url: url)},
+      httpHeaders: userSetting.isServerMode ? {} : {...Hoster.header(url: url)},
     );
   }
 }
 
 class PixivProvider {
   static ImageProvider url(String url, {String? preUrl}) {
+    String targetUrl = url;
+    if (userSetting.isServerMode && userSetting.serverUrl.isNotEmpty) {
+      if (!url.startsWith(userSetting.serverUrl) && !url.contains('/api/v1/media/archive/')) {
+        final serverBase = userSetting.serverUrl.replaceAll(RegExp(r'/+$'), '');
+        targetUrl = '$serverBase/api/v1/media/image?url=${Uri.encodeComponent(url)}';
+      }
+    }
     return CachedNetworkImageProvider(
-      url,
-      headers: Hoster.header(url: preUrl),
-      cacheManager: pixivCacheManager,
+      targetUrl,
+      headers: userSetting.isServerMode ? {} : Hoster.header(url: preUrl),
+      cacheManager: userSetting.isServerMode ? null : pixivCacheManager,
     );
   }
 }

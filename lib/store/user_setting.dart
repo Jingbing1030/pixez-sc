@@ -100,6 +100,9 @@ abstract class _UserSetting with Store {
   static const String DRAG_START_X_KEY = "drag_start_x";
   static const String AUTO_TAG_WHEN_STAR_KEY = "auto_tag_when_star";
   static const String HAPTIC_FEEDBACK_KEY = "haptic_feedback";
+  static const String IS_SERVER_MODE_KEY = "is_server_mode";
+  static const String SERVER_URL_KEY = "server_url";
+  static const String AUTO_DISCOVER_SERVER_KEY = "auto_discover_server";
 
   @observable
   double dragStartX = 0;
@@ -221,6 +224,25 @@ abstract class _UserSetting with Store {
   setHapticFeedback(bool value) async {
     await prefs.setBool(HAPTIC_FEEDBACK_KEY, value);
     hapticFeedback = value;
+  }
+
+  bool isServerMode = false;
+  String serverUrl = "http://127.0.0.1:8080";
+  bool autoDiscoverServer = true;
+
+  Future<void> setServerMode(bool value) async {
+    isServerMode = value;
+    await prefs.setBool(IS_SERVER_MODE_KEY, value);
+  }
+
+  Future<void> setServerUrl(String value) async {
+    serverUrl = value;
+    await prefs.setString(SERVER_URL_KEY, value);
+  }
+
+  Future<void> setAutoDiscoverServer(bool value) async {
+    autoDiscoverServer = value;
+    await prefs.setBool(AUTO_DISCOVER_SERVER_KEY, value);
   }
 
   @action
@@ -588,6 +610,9 @@ abstract class _UserSetting with Store {
     ignoreUpdateVersion = prefs.getString(IGNORE_UPDATE_VERSION_KEY);
     illustDetailSaveSkipLongPress =
         prefs.getBool(ILLUST_DETAIL_SAVE_SKIP_LONG_PRESS_KEY) ?? false;
+    isServerMode = prefs.getBool(IS_SERVER_MODE_KEY) ?? false;
+    serverUrl = prefs.getString(SERVER_URL_KEY) ?? "http://127.0.0.1:8080";
+    autoDiscoverServer = prefs.getBool(AUTO_DISCOVER_SERVER_KEY) ?? true;
     if (Platform.isAndroid) {
       try {
         await SecurePlugin.configSecureWindow(nsfwMask);

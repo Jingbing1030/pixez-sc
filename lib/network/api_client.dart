@@ -37,6 +37,18 @@ import 'package:rhttp/rhttp.dart' as r;
 
 final ApiClient apiClient = ApiClient();
 
+class ServerGatewayInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (userSetting.isServerMode && userSetting.serverUrl.isNotEmpty) {
+      final serverBase = userSetting.serverUrl.replaceAll(RegExp(r'/+$'), '');
+      options.baseUrl = '$serverBase/api/v1/pixiv';
+      options.headers.remove(HttpHeaders.hostHeader);
+    }
+    return handler.next(options);
+  }
+}
+
 class ApiClient {
   late Dio httpClient;
 
@@ -69,13 +81,15 @@ class ApiClient {
   );
 
   Future<Dio> createDioClient() async {
-    final compatibleClient = await r.RhttpCompatibleClient.create(
-      settings: PixezNetworkSettings.forHost(
-        BASE_API_URL_HOST,
-        userSetting.networkMode,
-      ),
-    );
-    httpClient.httpClientAdapter = ConversionLayerAdapter(compatibleClient);
+    if (!userSetting.isServerMode) {
+      final compatibleClient = await r.RhttpCompatibleClient.create(
+        settings: PixezNetworkSettings.forHost(
+          BASE_API_URL_HOST,
+          userSetting.networkMode,
+        ),
+      );
+      httpClient.httpClientAdapter = ConversionLayerAdapter(compatibleClient);
+    }
     if (Platform.isAndroid) {
       try {
         DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
@@ -117,6 +131,7 @@ class ApiClient {
               },
             ),
           )
+          ..interceptors.add(ServerGatewayInterceptor())
           ..interceptors.add(DioCacheInterceptor(options: options))
           ..interceptors.add(RefreshTokenInterceptor());
     if (kDebugMode) {

@@ -3,6 +3,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:pixez/component/pixiv_image.dart';
 import 'package:pixez/i18n.dart';
 import 'package:pixez/main.dart';
+import 'package:pixez/network/lan_discovery_client.dart';
 import 'package:pixez/network/network_mode.dart';
 
 class NetworkPage extends StatefulWidget {
@@ -18,6 +19,19 @@ class NetworkPage extends StatefulWidget {
 class _NetworkPageState extends State<NetworkPage> {
   late bool _automaticallyImplyLeading;
   late TextEditingController _textEditingController;
+  bool _isScanning = false;
+  List<DiscoveredServer> _discoveredServers = [];
+
+  void _scanLanServers() async {
+    if (!mounted) return;
+    setState(() => _isScanning = true);
+    final results = await lanDiscoveryClient.scan();
+    if (!mounted) return;
+    setState(() {
+      _discoveredServers = results;
+      _isScanning = false;
+    });
+  }
 
   @override
   void initState() {
@@ -26,6 +40,9 @@ class _NetworkPageState extends State<NetworkPage> {
     );
     _automaticallyImplyLeading = widget.automaticallyImplyLeading ?? false;
     super.initState();
+    if (userSetting.isServerMode) {
+      _scanLanServers();
+    }
   }
 
   @override
@@ -187,10 +204,119 @@ class _NetworkPageState extends State<NetworkPage> {
                     ),
                   ),
                 ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: _buildPixezServerSetting(context),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildPixezServerSetting(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: Text('Pixez-s 无头服务端'),
+            subtitle: Text(
+              userSetting.isServerMode
+                  ? '已启用（通过本地/远程服务端代理）'
+                  : '未启用（单机直连 Pixiv）',
+            ),
+            value: userSetting.isServerMode,
+            onChanged: (val) async {
+              await userSetting.setServerMode(val);
+              setState(() {});
+              if (val && _discoveredServers.isEmpty) {
+                _scanLanServers();
+              }
+            },
+          ),
+          if (userSetting.isServerMode) ...[
+            Divider(height: 1),
+            ListTile(
+              title: Text('服务端地址'),
+              subtitle: Text(userSetting.serverUrl),
+              trailing: IconButton(
+                icon: Icon(Icons.edit),
+                onPressed: () => _editServerUrl(context),
+              ),
+            ),
+            ListTile(
+              title: Text('局域网服务自动发现'),
+              subtitle: Text(
+                _isScanning
+                    ? '正在扫描局域网服务...'
+                    : (_discoveredServers.isEmpty
+                        ? '未发现服务（点击右侧按钮扫描）'
+                        : '发现 ${_discoveredServers.length} 个可用服务端'),
+              ),
+              trailing: _isScanning
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      icon: Icon(Icons.refresh),
+                      onPressed: _scanLanServers,
+                    ),
+            ),
+            if (_discoveredServers.isNotEmpty)
+              ..._discoveredServers.map((server) {
+                final isSelected = userSetting.serverUrl == server.primaryUrl;
+                return ListTile(
+                  leading: Icon(
+                    isSelected ? Icons.check_circle : Icons.dns_outlined,
+                    color: isSelected ? Colors.green : null,
+                  ),
+                  title: Text(server.hostName),
+                  subtitle: Text(server.primaryUrl),
+                  onTap: () async {
+                    await userSetting.setServerUrl(server.primaryUrl);
+                    setState(() {});
+                  },
+                );
+              }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _editServerUrl(BuildContext context) {
+    final controller = TextEditingController(text: userSetting.serverUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('设置 Pixez-s 服务端地址'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'http://192.168.1.100:8080',
+            labelText: 'URL 地址',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newUrl = controller.text.trim();
+              if (newUrl.isNotEmpty) {
+                await userSetting.setServerUrl(newUrl);
+                setState(() {});
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: Text('确定'),
+          ),
+        ],
       ),
     );
   }
