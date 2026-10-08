@@ -112,11 +112,35 @@ void main(List<String> args) async {
       .addMiddleware(corsHeaders())
       .addHandler(app.call);
 
-  final server = await io.serve(handler, config.host, config.port);
+  HttpServer? server;
+  int candidatePort = config.port;
+  const maxPortAttempts = 50;
+
+  for (int attempt = 0; attempt < maxPortAttempts; attempt++) {
+    try {
+      server = await io.serve(handler, config.host, candidatePort);
+      break;
+    } on SocketException catch (_) {
+      if (attempt == maxPortAttempts - 1) {
+        rethrow;
+      }
+      print('[Server] Port $candidatePort is in use, automatically incrementing to ${candidatePort + 1}...');
+      candidatePort++;
+    }
+  }
+
+  if (server == null) {
+    throw Exception('Failed to bind server to any port in range ${config.port}..$candidatePort');
+  }
+
   print('[Server] Running on http://${server.address.host}:${server.port}');
 
-  // Start LAN discovery beacon and probe responder
-  final discoveryService = DiscoveryService(config: config, discoveryPort: config.discoveryPort);
+  // Start LAN discovery beacon and probe responder (announcing the actual bound HTTP port!)
+  final discoveryService = DiscoveryService(
+    config: config,
+    actualHttpPort: server.port,
+    discoveryPort: config.discoveryPort,
+  );
   await discoveryService.start();
   print('==================================================');
 
@@ -125,7 +149,7 @@ void main(List<String> args) async {
     print('\n[Server] Shutting down...');
     discoveryService.stop();
     tokenManager.stop();
-    await server.close();
+    await server?.close();
     appDb.close();
     exit(0);
   });

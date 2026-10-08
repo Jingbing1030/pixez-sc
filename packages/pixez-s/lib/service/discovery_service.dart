@@ -5,56 +5,79 @@ import '../config/server_config.dart';
 
 class DiscoveryService {
   final ServerConfig config;
+  final int actualHttpPort;
   final int discoveryPort;
 
   RawDatagramSocket? _socket;
   Timer? _broadcastTimer;
   bool _isRunning = false;
+  int _activeDiscoveryPort;
 
   static const String serviceTag = 'pixez-s';
   static const int defaultDiscoveryPort = 41234;
 
   DiscoveryService({
     required this.config,
-    this.discoveryPort = defaultDiscoveryPort,
-  });
+    int? actualHttpPort,
+    int? discoveryPort,
+  })  : actualHttpPort = actualHttpPort ?? config.port,
+        discoveryPort = discoveryPort ?? config.discoveryPort,
+        _activeDiscoveryPort = discoveryPort ?? config.discoveryPort;
 
   bool get isRunning => _isRunning;
+  int get activeDiscoveryPort => _activeDiscoveryPort;
 
   Future<void> start() async {
     if (_isRunning) return;
 
-    try {
-      _socket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4,
-        discoveryPort,
-        reuseAddress: true,
-        reusePort: true,
-      );
-      _socket!.broadcastEnabled = true;
-      _isRunning = true;
+    int candidatePort = discoveryPort;
+    const maxAttempts = 20;
 
-      // Listen for incoming discovery probe queries from clients
-      _socket!.listen((RawSocketEvent event) {
-        if (event == RawSocketEvent.read) {
-          final datagram = _socket?.receive();
-          if (datagram != null) {
-            _handleIncomingDatagram(datagram);
-          }
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        _socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          candidatePort,
+          reuseAddress: true,
+          reusePort: true,
+        );
+        _activeDiscoveryPort = candidatePort;
+        break;
+      } on SocketException catch (_) {
+        if (attempt == maxAttempts - 1) {
+          print('[Discovery] Warning: All UDP ports in range $discoveryPort..$candidatePort are in use.');
+          return;
         }
-      });
-
-      // Periodically broadcast presence beacon to the entire subnet
-      _broadcastTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-        _broadcastBeacon();
-      });
-
-      // Send initial beacon immediately
-      _broadcastBeacon();
-      print('[Discovery] LAN discovery broadcast started on UDP port $discoveryPort');
-    } catch (e) {
-      print('[Discovery] Warning: Failed to start UDP broadcast on port $discoveryPort: $e');
+        candidatePort++;
+      } catch (e) {
+        print('[Discovery] Warning: Failed to bind UDP discovery socket: $e');
+        return;
+      }
     }
+
+    if (_socket == null) return;
+
+    _socket!.broadcastEnabled = true;
+    _isRunning = true;
+
+    // Listen for incoming discovery probe queries from clients
+    _socket!.listen((RawSocketEvent event) {
+      if (event == RawSocketEvent.read) {
+        final datagram = _socket?.receive();
+        if (datagram != null) {
+          _handleIncomingDatagram(datagram);
+        }
+      }
+    });
+
+    // Periodically broadcast presence beacon to the entire subnet
+    _broadcastTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _broadcastBeacon();
+    });
+
+    // Send initial beacon immediately
+    _broadcastBeacon();
+    print('[Discovery] LAN discovery broadcast started on UDP port $_activeDiscoveryPort (announcing HTTP port $actualHttpPort)');
   }
 
   Future<List<String>> _getLocalIpv4Addresses() async {
@@ -81,7 +104,8 @@ class DiscoveryService {
       'service': serviceTag,
       'version': '0.1.0',
       'host_name': Platform.localHostname,
-      'port': config.port,
+      'port': actualHttpPort,
+      'discovery_port': _activeDiscoveryPort,
       'ips': localIps,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
@@ -93,7 +117,12 @@ class DiscoveryService {
       final packet = await _buildAnnouncementPacket();
       final data = utf8.encode(jsonEncode(packet));
       final broadcastTarget = InternetAddress('255.255.255.255');
-      _socket?.send(data, broadcastTarget, discoveryPort);
+      // Always broadcast to standard default port so scanning clients receive it
+      _socket?.send(data, broadcastTarget, defaultDiscoveryPort);
+      // If bound to a shifted port, also broadcast to that shifted port
+      if (_activeDiscoveryPort != defaultDiscoveryPort) {
+        _socket?.send(data, broadcastTarget, _activeDiscoveryPort);
+      }
     } catch (_) {}
   }
 

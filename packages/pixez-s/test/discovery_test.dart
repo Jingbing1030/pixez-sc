@@ -7,24 +7,20 @@ import 'package:test/test.dart';
 
 void main() {
   group('LAN Discovery Service Tests', () {
-    late DiscoveryService discoveryService;
-    const testPort = 41239;
-
-    setUp(() async {
+    test('should respond to client discovery probe over UDP', () async {
+      const testPort = 41250;
       final config = ServerConfig(
         dataDir: Directory.systemTemp.path,
         port: 8888,
         discoveryPort: testPort,
       );
-      discoveryService = DiscoveryService(config: config, discoveryPort: testPort);
+      final discoveryService = DiscoveryService(
+        config: config,
+        actualHttpPort: 8888,
+        discoveryPort: testPort,
+      );
       await discoveryService.start();
-    });
 
-    tearDown(() {
-      discoveryService.stop();
-    });
-
-    test('should respond to client discovery probe over UDP', () async {
       final clientSocket = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
       final completer = Completer<Map<String, dynamic>>();
 
@@ -48,11 +44,43 @@ void main() {
 
       final response = await completer.future.timeout(const Duration(seconds: 3));
       clientSocket.close();
+      discoveryService.stop();
 
       expect(response['service'], equals('pixez-s'));
       expect(response['port'], equals(8888));
       expect(response['version'], equals('0.1.0'));
       expect(response['host_name'], isNotEmpty);
+    });
+
+    test('should automatically increment UDP port if candidate port is occupied', () async {
+      const occupiedPort = 41260;
+      // Intentionally occupy the port exclusively
+      final blockerSocket = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        occupiedPort,
+        reuseAddress: false,
+        reusePort: false,
+      );
+
+      final config = ServerConfig(
+        dataDir: Directory.systemTemp.path,
+        port: 9090,
+        discoveryPort: occupiedPort,
+      );
+
+      final fallbackService = DiscoveryService(
+        config: config,
+        actualHttpPort: 9090,
+        discoveryPort: occupiedPort,
+      );
+      await fallbackService.start();
+
+      // The service should have shifted to occupiedPort + 1
+      expect(fallbackService.activeDiscoveryPort, equals(occupiedPort + 1));
+      expect(fallbackService.isRunning, isTrue);
+
+      fallbackService.stop();
+      blockerSocket.close();
     });
   });
 }
