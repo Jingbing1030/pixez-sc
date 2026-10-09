@@ -1,0 +1,42 @@
+name: Build Standalone Server
+
+on:
+  push:
+    paths:
+      - 'packages/pixez-s/**'
+      - '.github/workflows/build_server.yml'
+  workflow_dispatch:
+
+jobs:
+  build-server:
+    name: Build Pixez-s Native Binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: 签出仓库
+        uses: actions/checkout@v4
+
+      - name: 设置 Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: 获取依赖
+        working-directory: packages/pixez-s
+        run: dart pub get
+
+      - name: 运行单元与集成测试
+        working-directory: packages/pixez-s
+        run: dart test
+
+      - name: 编译 Linux x86_64 原生独立可执行文件
+        working-directory: packages/pixez-s
+        run: |
+          mkdir -p bin/dist
+          dart compile exe bin/server.dart -o bin/dist/pixez-s-linux-x86_64
+
+      - name: 上传服务端独立二进制构件
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixez-s-standalone-server
+          path: packages/pixez-s/bin/dist/pixez-s-linux-x86_64
+          retention-days: 14
