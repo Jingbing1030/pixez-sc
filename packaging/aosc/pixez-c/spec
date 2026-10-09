@@ -1,0 +1,9 @@
+VER=1.9.87
+REL=0
+SRCS="https://github.com/Jingbing1030/pixez-sc/archive/refs/tags/v${VER}.tar.gz"
+CHKSUMS="SKIP"
+PKGNAME=pixez-c
+PKGDES="A modern, feature-rich third-party Pixiv GUI client (Client Only)"
+PKGDEP="gtk3 webkit2gtk-4.1 libsqlite3-0 ca-certificates"
+BUILDDEP="flutter rust cargo cmake ninja-build pkg-config clang libgtk-3-dev libwebkit2gtk-4.1-dev"
+PKGSEC="extra/web"

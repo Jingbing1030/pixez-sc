@@ -1,0 +1,6 @@
+cd packages/pixez-s
+dart pub get
+dart compile exe bin/server.dart -o pixez-s
+
+install -Dm755 pixez-s "$PKGDIR"/usr/bin/pixez-s
+install -Dm644 "$SRCDIR"/pixez-s.service "$PKGDIR"/usr/lib/systemd/system/pixez-s.service

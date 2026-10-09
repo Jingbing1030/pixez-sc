@@ -1,0 +1,15 @@
+[Unit]
+Description=Pixez-s Pixiv Headless Backend Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/pixez-s
+Restart=always
+RestartSec=5
+Environment=PIXEZ_PORT=8080
+Environment=PIXEZ_DATA_DIR=/var/lib/pixez-s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+VER=0.1.0
+REL=0
+SRCS="https://github.com/Jingbing1030/pixez-sc/archive/refs/tags/v${VER}.tar.gz"
+CHKSUMS="SKIP"
+PKGNAME=pixez-s
+PKGDES="Headless backend server for Pixiv with companion metadata archive, fallback mirror and LAN discovery"
+PKGDEP="libsqlite3-0 ca-certificates"
+BUILDDEP="dart"
+PKGSEC="extra/network"

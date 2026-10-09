@@ -1,0 +1,10 @@
+flutter build linux --release --no-pub --dart-define=ENABLE_EMBEDDED_SERVER=true
+
+mkdir -p "$PKGDIR"/usr/lib/pixez-cs
+cp -r build/linux/x64/release/bundle/* "$PKGDIR"/usr/lib/pixez-cs/
+
+mkdir -p "$PKGDIR"/usr/bin
+ln -sf /usr/lib/pixez-cs/pixez "$PKGDIR"/usr/bin/pixez-cs
+
+install -Dm644 linux/packaging/com.perol.pixez.desktop "$PKGDIR"/usr/share/applications/pixez-cs.desktop
+install -Dm644 assets/images/icon.png "$PKGDIR"/usr/share/pixmaps/pixez-cs.png
