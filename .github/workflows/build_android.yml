@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build Android APKs (pixez-c & pixez_cs)
     runs-on: ubuntu-latest
     steps:
       - name: 签出仓库
@@ -49,19 +49,42 @@ jobs:
       - name: 生成代码 (PixEz)
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: 构建 Android APK (Release)
+      - name: 构建 Pixez-c 纯客户端 Android APK (无内置服务端)
         run: |
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --split-per-abi --dart-define=ENABLE_EMBEDDED_SERVER=false
+          mkdir -p dist/pixez-c
+          for f in build/app/outputs/flutter-apk/*.apk; do
+            filename=$(basename "$f")
+            cp "$f" "dist/pixez-c/${filename/app-/pixez-c-}"
+          done
 
-      - name: 上传 APK 构件 (Artifacts)
+      - name: 构建 Pixez_cs 一体化客户端 Android APK (含内置服务端)
+        run: |
+          flutter build apk --release --split-per-abi --dart-define=ENABLE_EMBEDDED_SERVER=true
+          mkdir -p dist/pixez-cs
+          for f in build/app/outputs/flutter-apk/*.apk; do
+            filename=$(basename "$f")
+            cp "$f" "dist/pixez-cs/${filename/app-/pixez-cs-}"
+          done
+
+      - name: 上传 Pixez-c (纯客户端) APK 构件
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixez-c-android-apks
+          path: dist/pixez-c/*.apk
+          retention-days: 14
+
+      - name: 上传 Pixez-cs (一体化客户端) APK 构件
         uses: actions/upload-artifact@v4
         with:
           name: pixez-cs-android-apks
-          path: build/app/outputs/flutter-apk/*.apk
+          path: dist/pixez-cs/*.apk
           retention-days: 14
 
       - name: 发布 Release (仅在推送 Tag 时)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/*.apk
+          files: |
+            dist/pixez-c/*.apk
+            dist/pixez-cs/*.apk

@@ -5,6 +5,12 @@ import 'package:pixez/main.dart';
 import 'package:pixez_s/config/server_config.dart';
 import 'package:pixez_s/pixez_server.dart';
 
+/// Compile-time flag: true for pixez_cs (All-in-One), false for pixez-c (pure client).
+const bool kEnableEmbeddedServer = bool.fromEnvironment(
+  'ENABLE_EMBEDDED_SERVER',
+  defaultValue: true,
+);
+
 class EmbeddedServerManager {
   static final EmbeddedServerManager _instance = EmbeddedServerManager._internal();
   static EmbeddedServerManager get instance => _instance;
@@ -17,6 +23,7 @@ class EmbeddedServerManager {
   int? _actualPort;
   List<String> _lanIps = [];
 
+  static bool get isSupported => kEnableEmbeddedServer;
   bool get isRunning => _server?.isRunning ?? false;
   bool get isStarting => _isStarting;
   String? get lastError => _lastError;
@@ -25,6 +32,7 @@ class EmbeddedServerManager {
 
   /// Starts the embedded server using the current user settings.
   Future<bool> start() async {
+    if (!kEnableEmbeddedServer) return false;
     if (isRunning) return true;
     _isStarting = true;
     _lastError = null;
