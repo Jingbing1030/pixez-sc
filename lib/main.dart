@@ -36,6 +36,7 @@ import 'package:pixez/page/splash/splash_page.dart';
 import 'package:pixez/page/splash/splash_store.dart';
 import 'package:pixez/paths_plugin.dart';
 import 'package:pixez/single_instance_plugin.dart';
+import 'package:pixez/service/embedded_server_manager.dart';
 import 'package:pixez/src/generated/i18n/app_localizations.dart';
 import 'package:pixez/store/account_store.dart';
 import 'package:pixez/store/book_tag_store.dart';
@@ -115,6 +116,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     topStore.dispose();
     fetcher.stop();
     subscription.cancel();
+    if (embeddedServerManager.isRunning) {
+      embeddedServerManager.stop();
+    }
     if (Platform.isIOS) WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -129,7 +133,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     });
     userSetting.askInit();
-    userSetting.init();
+    userSetting.init().then((_) {
+      if (userSetting.isServerMode &&
+          userSetting.serverType == 'embedded' &&
+          userSetting.embeddedAutoStart) {
+        embeddedServerManager.start();
+      }
+    });
     accountStore.fetch();
     bookTagStore.init();
     muteStore.init();

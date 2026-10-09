@@ -5,6 +5,7 @@ import 'package:pixez/i18n.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/network/lan_discovery_client.dart';
 import 'package:pixez/network/network_mode.dart';
+import 'package:pixez/service/embedded_server_manager.dart';
 
 class NetworkPage extends StatefulWidget {
   final bool? automaticallyImplyLeading;
@@ -216,71 +217,171 @@ class _NetworkPageState extends State<NetworkPage> {
   }
 
   Widget _buildPixezServerSetting(BuildContext context) {
+    final isEmbedded = userSetting.serverType == 'embedded';
+    final serverRunning = embeddedServerManager.isRunning;
+
     return Card(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SwitchListTile(
-            title: Text('Pixez-s 无头服务端'),
+            title: Text('Pixez-s 服务端模式'),
             subtitle: Text(
               userSetting.isServerMode
-                  ? '已启用（通过本地/远程服务端代理）'
+                  ? (isEmbedded
+                      ? '已启用：内置服务端（本机自建 All-in-One）'
+                      : '已启用：外置服务端（远程 NAS/服务器）')
                   : '未启用（单机直连 Pixiv）',
             ),
             value: userSetting.isServerMode,
             onChanged: (val) async {
-              await userSetting.setServerMode(val);
-              setState(() {});
-              if (val && _discoveredServers.isEmpty) {
-                _scanLanServers();
+              if (val) {
+                await userSetting.setServerMode(true);
+                if (userSetting.serverType == 'disabled') {
+                  await userSetting.setServerType('embedded');
+                }
+                if (userSetting.serverType == 'embedded') {
+                  await embeddedServerManager.start();
+                } else if (_discoveredServers.isEmpty) {
+                  _scanLanServers();
+                }
+              } else {
+                await userSetting.setServerMode(false);
+                if (embeddedServerManager.isRunning) {
+                  await embeddedServerManager.stop();
+                }
               }
+              setState(() {});
             },
           ),
           if (userSetting.isServerMode) ...[
             Divider(height: 1),
             ListTile(
-              title: Text('服务端地址'),
-              subtitle: Text(userSetting.serverUrl),
-              trailing: IconButton(
-                icon: Icon(Icons.edit),
-                onPressed: () => _editServerUrl(context),
+              title: Text('服务端部署类型'),
+              subtitle: Text(isEmbedded ? '内置服务端（本机运行）' : '外置独立服务端（局域网/远程）'),
+              trailing: DropdownButton<String>(
+                value: userSetting.serverType == 'disabled' ? 'embedded' : userSetting.serverType,
+                underline: SizedBox(),
+                items: [
+                  DropdownMenuItem(value: 'embedded', child: Text('内置服务端 (本机)')),
+                  DropdownMenuItem(value: 'remote', child: Text('外置服务端 (远程/NAS)')),
+                ],
+                onChanged: (val) async {
+                  if (val == null) return;
+                  await userSetting.setServerType(val);
+                  if (val == 'embedded') {
+                    await embeddedServerManager.start();
+                  } else {
+                    if (embeddedServerManager.isRunning) {
+                      await embeddedServerManager.stop();
+                    }
+                    if (_discoveredServers.isEmpty) {
+                      _scanLanServers();
+                    }
+                  }
+                  setState(() {});
+                },
               ),
             ),
-            ListTile(
-              title: Text('局域网服务自动发现'),
-              subtitle: Text(
-                _isScanning
-                    ? '正在扫描局域网服务...'
-                    : (_discoveredServers.isEmpty
-                        ? '未发现服务（点击右侧按钮扫描）'
-                        : '发现 ${_discoveredServers.length} 个可用服务端'),
-              ),
-              trailing: _isScanning
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton(
-                      icon: Icon(Icons.refresh),
-                      onPressed: _scanLanServers,
-                    ),
-            ),
-            if (_discoveredServers.isNotEmpty)
-              ..._discoveredServers.map((server) {
-                final isSelected = userSetting.serverUrl == server.primaryUrl;
-                return ListTile(
-                  leading: Icon(
-                    isSelected ? Icons.check_circle : Icons.dns_outlined,
-                    color: isSelected ? Colors.green : null,
-                  ),
-                  title: Text(server.hostName),
-                  subtitle: Text(server.primaryUrl),
-                  onTap: () async {
-                    await userSetting.setServerUrl(server.primaryUrl);
+            if (isEmbedded) ...[
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  serverRunning ? Icons.check_circle : Icons.pause_circle_outline,
+                  color: serverRunning ? Colors.green : Colors.grey,
+                ),
+                title: Text(serverRunning ? '内置服务端正在运行' : '内置服务端已停止'),
+                subtitle: Text(
+                  serverRunning
+                      ? '监听端口: ${embeddedServerManager.actualPort ?? userSetting.embeddedPort}' +
+                          (embeddedServerManager.lanIps.isNotEmpty && userSetting.embeddedLanShare
+                              ? '\n局域网共享: http://${embeddedServerManager.lanIps.first}:${embeddedServerManager.actualPort}'
+                              : '')
+                      : (embeddedServerManager.lastError != null
+                          ? '启动失败: ${embeddedServerManager.lastError}'
+                          : '点击右侧按钮启动'),
+                ),
+                trailing: TextButton.icon(
+                  icon: Icon(serverRunning ? Icons.stop : Icons.play_arrow),
+                  label: Text(serverRunning ? '停止' : '启动'),
+                  onPressed: () async {
+                    if (serverRunning) {
+                      await embeddedServerManager.stop();
+                    } else {
+                      await embeddedServerManager.start();
+                    }
                     setState(() {});
                   },
-                );
-              }),
+                ),
+              ),
+              SwitchListTile(
+                title: Text('开机/启动应用时自启'),
+                subtitle: Text('打开 Pixez-cs 时自动在后台启动内置服务端'),
+                value: userSetting.embeddedAutoStart,
+                onChanged: (val) async {
+                  await userSetting.setEmbeddedAutoStart(val);
+                  setState(() {});
+                },
+              ),
+              SwitchListTile(
+                title: Text('允许局域网共享'),
+                subtitle: Text('开启 UDP 广播并在 0.0.0.0 监听，允许家中其他设备连入此手机/电脑'),
+                value: userSetting.embeddedLanShare,
+                onChanged: (val) async {
+                  await userSetting.setEmbeddedLanShare(val);
+                  if (serverRunning) {
+                    await embeddedServerManager.restart();
+                  }
+                  setState(() {});
+                },
+              ),
+            ] else ...[
+              Divider(height: 1),
+              ListTile(
+                title: Text('外置服务端地址'),
+                subtitle: Text(userSetting.serverUrl),
+                trailing: IconButton(
+                  icon: Icon(Icons.edit),
+                  onPressed: () => _editServerUrl(context),
+                ),
+              ),
+              ListTile(
+                title: Text('局域网服务自动发现'),
+                subtitle: Text(
+                  _isScanning
+                      ? '正在扫描局域网服务...'
+                      : (_discoveredServers.isEmpty
+                          ? '未发现服务（点击右侧按钮扫描）'
+                          : '发现 ${_discoveredServers.length} 个可用服务端'),
+                ),
+                trailing: _isScanning
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        icon: Icon(Icons.refresh),
+                        onPressed: _scanLanServers,
+                      ),
+              ),
+              if (_discoveredServers.isNotEmpty)
+                ..._discoveredServers.map((server) {
+                  final isSelected = userSetting.serverUrl == server.primaryUrl;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected ? Icons.check_circle : Icons.dns_outlined,
+                      color: isSelected ? Colors.green : null,
+                    ),
+                    title: Text(server.hostName),
+                    subtitle: Text(server.primaryUrl),
+                    onTap: () async {
+                      await userSetting.setServerUrl(server.primaryUrl);
+                      setState(() {});
+                    },
+                  );
+                }),
+            ],
           ],
         ],
       ),

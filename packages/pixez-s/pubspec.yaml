@@ -12,8 +12,8 @@ dependencies:
   shelf_static: ^1.1.2
   shelf_web_socket: ^2.0.0
   web_socket_channel: ^3.0.0
-  dio: ^5.7.0
-  sqlite3: ^2.4.0
+  dio: '>=5.0.0 <6.0.0'
+  sqlite3: '>=2.4.0 <4.0.0'
   path: ^1.9.0
   crypto: ^3.0.3
   intl: ^0.19.0

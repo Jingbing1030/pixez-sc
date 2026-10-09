@@ -226,13 +226,29 @@ abstract class _UserSetting with Store {
     hapticFeedback = value;
   }
 
-  bool isServerMode = false;
+  static const String SERVER_TYPE_KEY = "server_type";
+  static const String EMBEDDED_AUTO_START_KEY = "embedded_auto_start";
+  static const String EMBEDDED_LAN_SHARE_KEY = "embedded_lan_share";
+  static const String EMBEDDED_PORT_KEY = "embedded_port";
+
+  bool isServerMode = true;
+  String serverType = "embedded"; // 'embedded', 'remote', 'disabled'
   String serverUrl = "http://127.0.0.1:8080";
   bool autoDiscoverServer = true;
+  bool embeddedAutoStart = true;
+  bool embeddedLanShare = true;
+  int embeddedPort = 8080;
 
   Future<void> setServerMode(bool value) async {
     isServerMode = value;
     await prefs.setBool(IS_SERVER_MODE_KEY, value);
+  }
+
+  Future<void> setServerType(String value) async {
+    serverType = value;
+    await prefs.setString(SERVER_TYPE_KEY, value);
+    isServerMode = (value != 'disabled');
+    await prefs.setBool(IS_SERVER_MODE_KEY, isServerMode);
   }
 
   Future<void> setServerUrl(String value) async {
@@ -243,6 +259,21 @@ abstract class _UserSetting with Store {
   Future<void> setAutoDiscoverServer(bool value) async {
     autoDiscoverServer = value;
     await prefs.setBool(AUTO_DISCOVER_SERVER_KEY, value);
+  }
+
+  Future<void> setEmbeddedAutoStart(bool value) async {
+    embeddedAutoStart = value;
+    await prefs.setBool(EMBEDDED_AUTO_START_KEY, value);
+  }
+
+  Future<void> setEmbeddedLanShare(bool value) async {
+    embeddedLanShare = value;
+    await prefs.setBool(EMBEDDED_LAN_SHARE_KEY, value);
+  }
+
+  Future<void> setEmbeddedPort(int value) async {
+    embeddedPort = value;
+    await prefs.setInt(EMBEDDED_PORT_KEY, value);
   }
 
   @action
@@ -610,9 +641,13 @@ abstract class _UserSetting with Store {
     ignoreUpdateVersion = prefs.getString(IGNORE_UPDATE_VERSION_KEY);
     illustDetailSaveSkipLongPress =
         prefs.getBool(ILLUST_DETAIL_SAVE_SKIP_LONG_PRESS_KEY) ?? false;
-    isServerMode = prefs.getBool(IS_SERVER_MODE_KEY) ?? false;
+    serverType = prefs.getString(SERVER_TYPE_KEY) ?? "embedded";
+    isServerMode = prefs.getBool(IS_SERVER_MODE_KEY) ?? (serverType != 'disabled');
     serverUrl = prefs.getString(SERVER_URL_KEY) ?? "http://127.0.0.1:8080";
     autoDiscoverServer = prefs.getBool(AUTO_DISCOVER_SERVER_KEY) ?? true;
+    embeddedAutoStart = prefs.getBool(EMBEDDED_AUTO_START_KEY) ?? true;
+    embeddedLanShare = prefs.getBool(EMBEDDED_LAN_SHARE_KEY) ?? true;
+    embeddedPort = prefs.getInt(EMBEDDED_PORT_KEY) ?? 8080;
     if (Platform.isAndroid) {
       try {
         await SecurePlugin.configSecureWindow(nsfwMask);
