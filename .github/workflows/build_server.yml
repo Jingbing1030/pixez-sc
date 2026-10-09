@@ -1,16 +1,33 @@
-name: Build Standalone Server
+name: Build Standalone Server (Pixez-s)
 
 on:
   push:
     paths:
       - 'packages/pixez-s/**'
       - '.github/workflows/build_server.yml'
+    branches:
+      - pixez-cs
+      - dev
+      - master
   workflow_dispatch:
 
 jobs:
-  build-server:
-    name: Build Pixez-s Native Binary
-    runs-on: ubuntu-latest
+  build-server-matrix:
+    name: Build Pixez-s for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            output_name: pixez-s-linux-x86_64
+          - os: windows-latest
+            target: windows-x64
+            output_name: pixez-s-windows-x64.exe
+          - os: macos-latest
+            target: macos-arm64
+            output_name: pixez-s-macos-arm64
     steps:
       - name: 签出仓库
         uses: actions/checkout@v4
@@ -24,19 +41,20 @@ jobs:
         working-directory: packages/pixez-s
         run: dart pub get
 
-      - name: 运行单元与集成测试
+      - name: 运行单元与集成测试 (Linux Only)
+        if: matrix.os == 'ubuntu-latest'
         working-directory: packages/pixez-s
         run: dart test
 
-      - name: 编译 Linux x86_64 原生独立可执行文件
+      - name: 编译原生独立服务端程序
         working-directory: packages/pixez-s
         run: |
           mkdir -p bin/dist
-          dart compile exe bin/server.dart -o bin/dist/pixez-s-linux-x86_64
+          dart compile exe bin/server.dart -o bin/dist/${{ matrix.output_name }}
 
-      - name: 上传服务端独立二进制构件
+      - name: 上传服务端独立二进制构件 (${{ matrix.target }})
         uses: actions/upload-artifact@v4
         with:
-          name: pixez-s-standalone-server
-          path: packages/pixez-s/bin/dist/pixez-s-linux-x86_64
+          name: ${{ matrix.output_name }}
+          path: packages/pixez-s/bin/dist/${{ matrix.output_name }}
           retention-days: 14

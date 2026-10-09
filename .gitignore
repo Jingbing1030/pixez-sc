@@ -122,3 +122,5 @@ msic
 # FVM Version Cache
 .fvm/
 /lib/src/generated/
+packages/pixez-s/bin/pixez-s*
+packages/pixez-s/bin/dist/
