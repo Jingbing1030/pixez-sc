@@ -26,6 +26,8 @@ class Message:
             return bytes([0x80 | ch, self.note, self.velocity])
         if self.type == 'program_change':
             return bytes([0xC0 | ch, self.program])
+        if self.type == 'control_change':
+            return bytes([0xB0 | ch, self.control, self.value])
         raise ValueError(self.type)
 
 class MetaMessage(Message):
